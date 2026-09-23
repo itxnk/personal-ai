@@ -1,0 +1,6 @@
+.env
+data/
+!data/personal/README.txt
+*.gpg
+*.tar
+__pycache__/

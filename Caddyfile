@@ -1,0 +1,11 @@
+https://localhost {
+	tls internal
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+	}
+	reverse_proxy open-webui:8080
+}
