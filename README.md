@@ -40,3 +40,4 @@ docker compose ps        # running processes
 docker compose logs -f   # logs
 docker compose down      # stop
 ```
+# personal-ai
