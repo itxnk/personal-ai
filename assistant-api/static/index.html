@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Personal AI Assistant</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:900px;margin:auto;padding:20px;background:#f6f7f9;color:#111}
+.card{background:white;border-radius:14px;padding:18px;margin:12px 0;box-shadow:0 2px 12px #0001}
+input,button{font:inherit;padding:10px;border-radius:8px;border:1px solid #ccc}
+button{cursor:pointer}.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1}
+.item{padding:10px 0;border-bottom:1px solid #eee}
+.small{color:#666;font-size:.9rem}
+</style>
+</head>
+<body>
+<h1>Personal AI Assistant</h1>
+<p class="small">Reminders, tasks, events and phone-call actions. Your personal knowledge chat remains in Open WebUI.</p>
+
+<div class="card">
+<h2>Reminder</h2>
+<div class="row">
+<input id="rt" placeholder="Reminder title">
+<input id="rd" type="datetime-local">
+<button onclick="addReminder()">Add</button>
+</div>
+</div>
+
+<div class="card">
+<h2>Task</h2>
+<div class="row">
+<input id="tt" placeholder="Task">
+<input id="td" type="datetime-local">
+<button onclick="addTask()">Add</button>
+</div>
+</div>
+
+<div class="card">
+<h2>Calendar event</h2>
+<div class="row">
+<input id="et" placeholder="Event title">
+<input id="ed" type="datetime-local">
+<button onclick="addEvent()">Add</button>
+</div>
+</div>
+
+<div class="card">
+<h2>Upcoming</h2>
+<div id="list">Loading...</div>
+</div>
+
+<div class="card">
+<h2>Call</h2>
+<div class="row">
+<input id="cn" placeholder="Name">
+<input id="cp" placeholder="Phone number">
+<button onclick="prepareCall()">Prepare call</button>
+</div>
+<div id="call"></div>
+</div>
+
+<script>
+const api = location.pathname.replace(/\/$/,"");
+const iso = v => v ? new Date(v).toISOString() : null;
+async function post(path,data){return fetch(api+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)}).then(r=>r.json())}
+async function addReminder(){await post("/api/reminders",{title:rt.value,due_at:iso(rd.value)});rt.value="";load()}
+async function addTask(){await post("/api/tasks",{title:tt.value,due_at:iso(td.value)});tt.value="";load()}
+async function addEvent(){await post("/api/events",{title:et.value,starts_at:iso(ed.value)});et.value="";load()}
+async function prepareCall(){
+ const r=await fetch(api+"/api/call?name="+encodeURIComponent(cn.value)+"&phone="+encodeURIComponent(cp.value)).then(x=>x.json());
+ call.innerHTML='<p>Call '+r.name+'?</p><a href="'+r.tel_url+'"><button>Confirm call</button></a>';
+}
+async function load(){
+ const [r,t,e]=await Promise.all([
+   fetch(api+"/api/reminders").then(x=>x.json()),
+   fetch(api+"/api/tasks").then(x=>x.json()),
+   fetch(api+"/api/events").then(x=>x.json())
+ ]);
+ list.innerHTML=[...r.map(x=>'<div class="item">🔔 '+x.title+' <span class="small">'+x.due_at+'</span></div>'),
+ ...t.map(x=>'<div class="item">☑️ '+x.title+' <span class="small">'+(x.due_at||"no due date")+'</span></div>'),
+ ...e.map(x=>'<div class="item">📅 '+x.title+' <span class="small">'+x.starts_at+'</span></div>')].join("")||"Nothing scheduled.";
+}
+async function notifyDue(){
+ if(!("Notification" in window))return;
+ if(Notification.permission==="default") await Notification.requestPermission();
+ if(Notification.permission!=="granted")return;
+ const due=await fetch(api+"/api/notifications/due").then(x=>x.json());
+ due.forEach(x=>new Notification("Personal AI reminder",{body:x.title}));
+}
+load(); setInterval(()=>{load();notifyDue()},15000); notifyDue();
+</script>
+</body>
+</html>
