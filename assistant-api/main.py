@@ -9,16 +9,17 @@ from pydantic import BaseModel, Field
 
 APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path("/app/data")
+PERSONAL_DIR = Path("/app/personal")
 DB_PATH = DATA_DIR / "assistant.db"
 WEB_PATH = APP_DIR / "static" / "index.html"
 
 app = FastAPI(
     title="Personal AI Assistant Tools",
-    version="0.2.0",
+    version="0.3.0",
     description=(
         "Private personal-assistant tools for Open WebUI. "
-        "The LLM can use these endpoints to manage reminders, tasks, "
-        "calendar events, and prepare phone calls."
+        "The LLM can use these endpoints to access the user's local profile, "
+        "manage reminders, tasks, calendar events, and prepare phone calls."
     ),
 )
 
@@ -61,22 +62,14 @@ def db():
 
 class ReminderIn(BaseModel):
     title: str = Field(min_length=1, max_length=300, description="Short reminder title.")
-    due_at: str = Field(
-        description="ISO-8601 datetime, preferably with timezone, e.g. 2026-09-27T09:00:00+05:00."
-    )
+    due_at: str = Field(description="ISO-8601 datetime, preferably with timezone, e.g. 2026-09-27T09:00:00+05:00.")
     notes: str = Field(default="", max_length=2000, description="Optional reminder notes.")
 
 
 class TaskIn(BaseModel):
     title: str = Field(min_length=1, max_length=300, description="Task title.")
-    due_at: Optional[str] = Field(
-        default=None,
-        description="Optional ISO-8601 due datetime with timezone."
-    )
-    priority: str = Field(
-        default="normal",
-        description="Task priority such as low, normal, high, or urgent."
-    )
+    due_at: Optional[str] = Field(default=None, description="Optional ISO-8601 due datetime with timezone.")
+    priority: str = Field(default="normal", description="Task priority such as low, normal, high, or urgent.")
 
 
 class EventIn(BaseModel):
@@ -91,21 +84,46 @@ class DoneIn(BaseModel):
     done: bool = True
 
 
-@app.get(
-    "/api/health",
-    operation_id="assistant_health",
-    summary="Check personal assistant health",
-)
+@app.get("/api/health", operation_id="assistant_health", summary="Check personal assistant health")
 def health():
     return {"status": "ok", "service": "personal-ai-assistant"}
 
 
 @app.get(
-    "/api/reminders",
-    operation_id="list_reminders",
-    summary="List reminders",
-    description="Use this when the user asks what reminders they have or what reminders are scheduled.",
+    "/api/personal",
+    operation_id="get_personal_profile",
+    summary="Get the user's personal profile and facts",
+    description=(
+        "IMPORTANT: Use this tool whenever the user asks about themselves, their name, "
+        "role, team, work, background, or other personal information. Read the local "
+        "personal knowledge files and answer from their contents. Do not guess."
+    ),
 )
+def personal_profile():
+    if not PERSONAL_DIR.exists():
+        return {"profile": "", "files": [], "message": "No personal knowledge directory is mounted."}
+
+    files = sorted(
+        p for p in PERSONAL_DIR.rglob("*")
+        if p.is_file() and p.suffix.lower() in {".txt", ".md"}
+    )
+    documents = []
+    for path in files:
+        try:
+            documents.append({
+                "file": str(path.relative_to(PERSONAL_DIR)),
+                "content": path.read_text(encoding="utf-8"),
+            })
+        except UnicodeDecodeError:
+            continue
+
+    profile = "\n\n".join(
+        f"[{item['file']}]\n{item['content']}" for item in documents
+    )
+    return {"profile": profile, "files": [item["file"] for item in documents]}
+
+
+@app.get("/api/reminders", operation_id="list_reminders", summary="List reminders", description="Use this when the user asks what reminders they have or what reminders are scheduled.")
 def reminders():
     conn = db()
     rows = conn.execute("SELECT * FROM reminders ORDER BY due_at").fetchall()
@@ -113,29 +131,17 @@ def reminders():
     return [dict(r) for r in rows]
 
 
-@app.post(
-    "/api/reminders",
-    operation_id="create_reminder",
-    summary="Create a reminder",
-    description="Create a reminder for the user. Convert the requested time to an ISO-8601 datetime with timezone.",
-)
+@app.post("/api/reminders", operation_id="create_reminder", summary="Create a reminder", description="Create a reminder for the user. Convert the requested time to an ISO-8601 datetime with timezone.")
 def create_reminder(item: ReminderIn):
     conn = db()
-    cur = conn.execute(
-        "INSERT INTO reminders(title,due_at,notes) VALUES(?,?,?)",
-        (item.title, item.due_at, item.notes),
-    )
+    cur = conn.execute("INSERT INTO reminders(title,due_at,notes) VALUES(?,?,?)", (item.title, item.due_at, item.notes))
     conn.commit()
     row = conn.execute("SELECT * FROM reminders WHERE id=?", (cur.lastrowid,)).fetchone()
     conn.close()
     return dict(row)
 
 
-@app.patch(
-    "/api/reminders/{item_id}",
-    operation_id="complete_reminder",
-    summary="Complete or reopen a reminder",
-)
+@app.patch("/api/reminders/{item_id}", operation_id="complete_reminder", summary="Complete or reopen a reminder")
 def complete_reminder(item_id: int, item: DoneIn):
     conn = db()
     cur = conn.execute("UPDATE reminders SET done=? WHERE id=?", (int(item.done), item_id))
@@ -146,12 +152,7 @@ def complete_reminder(item_id: int, item: DoneIn):
     return {"ok": True, "id": item_id, "done": item.done}
 
 
-@app.get(
-    "/api/tasks",
-    operation_id="list_tasks",
-    summary="List tasks",
-    description="Use this when the user asks about their tasks or to-do list.",
-)
+@app.get("/api/tasks", operation_id="list_tasks", summary="List tasks", description="Use this when the user asks about their tasks or to-do list.")
 def tasks():
     conn = db()
     rows = conn.execute("SELECT * FROM tasks ORDER BY done, due_at").fetchall()
@@ -159,29 +160,17 @@ def tasks():
     return [dict(r) for r in rows]
 
 
-@app.post(
-    "/api/tasks",
-    operation_id="create_task",
-    summary="Create a task",
-    description="Create a task for the user's to-do list.",
-)
+@app.post("/api/tasks", operation_id="create_task", summary="Create a task", description="Create a task for the user's to-do list.")
 def create_task(item: TaskIn):
     conn = db()
-    cur = conn.execute(
-        "INSERT INTO tasks(title,due_at,priority) VALUES(?,?,?)",
-        (item.title, item.due_at, item.priority),
-    )
+    cur = conn.execute("INSERT INTO tasks(title,due_at,priority) VALUES(?,?,?)", (item.title, item.due_at, item.priority))
     conn.commit()
     row = conn.execute("SELECT * FROM tasks WHERE id=?", (cur.lastrowid,)).fetchone()
     conn.close()
     return dict(row)
 
 
-@app.patch(
-    "/api/tasks/{item_id}",
-    operation_id="complete_task",
-    summary="Complete or reopen a task",
-)
+@app.patch("/api/tasks/{item_id}", operation_id="complete_task", summary="Complete or reopen a task")
 def complete_task(item_id: int, item: DoneIn):
     conn = db()
     cur = conn.execute("UPDATE tasks SET done=? WHERE id=?", (int(item.done), item_id))
@@ -192,12 +181,7 @@ def complete_task(item_id: int, item: DoneIn):
     return {"ok": True, "id": item_id, "done": item.done}
 
 
-@app.get(
-    "/api/events",
-    operation_id="list_events",
-    summary="List calendar events",
-    description="Use this when the user asks what events or appointments they have.",
-)
+@app.get("/api/events", operation_id="list_events", summary="List calendar events", description="Use this when the user asks what events or appointments they have.")
 def events():
     conn = db()
     rows = conn.execute("SELECT * FROM events ORDER BY starts_at").fetchall()
@@ -205,82 +189,38 @@ def events():
     return [dict(r) for r in rows]
 
 
-@app.post(
-    "/api/events",
-    operation_id="create_event",
-    summary="Create a calendar event",
-    description="Create a local calendar event for the user.",
-)
+@app.post("/api/events", operation_id="create_event", summary="Create a calendar event", description="Create a local calendar event for the user.")
 def create_event(item: EventIn):
     conn = db()
-    cur = conn.execute(
-        "INSERT INTO events(title,starts_at,ends_at,location,notes) VALUES(?,?,?,?,?)",
-        (item.title, item.starts_at, item.ends_at, item.location, item.notes),
-    )
+    cur = conn.execute("INSERT INTO events(title,starts_at,ends_at,location,notes) VALUES(?,?,?,?,?)", (item.title, item.starts_at, item.ends_at, item.location, item.notes))
     conn.commit()
     row = conn.execute("SELECT * FROM events WHERE id=?", (cur.lastrowid,)).fetchone()
     conn.close()
     return dict(row)
 
 
-@app.get(
-    "/api/agenda",
-    operation_id="get_agenda",
-    summary="Get the user's agenda",
-    description="Return reminders, tasks, and calendar events together. Use this for questions like 'what do I have today?' or 'show my schedule'.",
-)
+@app.get("/api/agenda", operation_id="get_agenda", summary="Get the user's agenda", description="Return reminders, tasks, and calendar events together. Use this for questions like 'what do I have today?' or 'show my schedule'.")
 def agenda():
     conn = db()
-    reminders_rows = conn.execute(
-        "SELECT * FROM reminders WHERE done=0 ORDER BY due_at"
-    ).fetchall()
-    tasks_rows = conn.execute(
-        "SELECT * FROM tasks WHERE done=0 ORDER BY due_at"
-    ).fetchall()
-    events_rows = conn.execute(
-        "SELECT * FROM events ORDER BY starts_at"
-    ).fetchall()
+    reminders_rows = conn.execute("SELECT * FROM reminders WHERE done=0 ORDER BY due_at").fetchall()
+    tasks_rows = conn.execute("SELECT * FROM tasks WHERE done=0 ORDER BY due_at").fetchall()
+    events_rows = conn.execute("SELECT * FROM events ORDER BY starts_at").fetchall()
     conn.close()
-    return {
-        "reminders": [dict(r) for r in reminders_rows],
-        "tasks": [dict(r) for r in tasks_rows],
-        "events": [dict(r) for r in events_rows],
-    }
+    return {"reminders": [dict(r) for r in reminders_rows], "tasks": [dict(r) for r in tasks_rows], "events": [dict(r) for r in events_rows]}
 
 
-@app.get(
-    "/api/notifications/due",
-    operation_id="get_due_notifications",
-    summary="Get due reminders",
-    description="Return reminders that are due and not completed.",
-)
+@app.get("/api/notifications/due", operation_id="get_due_notifications", summary="Get due reminders", description="Return reminders that are due and not completed.")
 def due_notifications():
     now = datetime.now(timezone.utc).isoformat()
     conn = db()
-    rows = conn.execute(
-        "SELECT * FROM reminders WHERE done=0 AND due_at <= ? ORDER BY due_at",
-        (now,),
-    ).fetchall()
+    rows = conn.execute("SELECT * FROM reminders WHERE done=0 AND due_at <= ? ORDER BY due_at", (now,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
-@app.get(
-    "/api/call",
-    operation_id="prepare_call",
-    summary="Prepare a phone call",
-    description=(
-        "Prepare a tel: link for a phone call. Never claim that a call was placed. "
-        "This endpoint only prepares the call and requires explicit user confirmation."
-    ),
-)
+@app.get("/api/call", operation_id="prepare_call", summary="Prepare a phone call", description="Prepare a tel: link for a phone call. Never claim that a call was placed. This endpoint only prepares the call and requires explicit user confirmation.")
 def prepare_call(name: str, phone: str):
-    return {
-        "name": name,
-        "phone": phone,
-        "tel_url": f"tel:{phone}",
-        "requires_confirmation": True,
-    }
+    return {"name": name, "phone": phone, "tel_url": f"tel:{phone}", "requires_confirmation": True}
 
 
 @app.get("/")
