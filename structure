@@ -1,0 +1,17 @@
+Your files
+   ↓
+Open WebUI
+   ↓
+Ollama embedding model
+   ↓
+vectors/embeddings
+   ↓
+Open WebUI's configured RAG/vector storage
+   ↓
+similarity search
+   ↓
+relevant text
+   ↓
+Ollama LLM
+   ↓
+answer
