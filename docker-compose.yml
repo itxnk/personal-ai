@@ -31,6 +31,10 @@ services:
       SCARF_NO_ANALYTICS: "true"
       WEBUI_SESSION_COOKIE_SECURE: "true"
       WEBUI_SESSION_COOKIE_SAME_SITE: strict
+      # Register the local Personal Assistant API as an OpenAPI tool server.
+      # Open WebUI reaches it over the Docker network; do not use localhost here.
+      TOOL_SERVER_CONNECTIONS: >-
+        [{"type":"openapi","url":"http://assistant-api:8090","spec_type":"url","spec":"","path":"openapi.json","auth_type":"none","key":"","config":{"enable":true},"info":{"id":"personal_assistant","name":"Personal Assistant","description":"Personal reminders, tasks, agenda, calendar events, due notifications, and phone-call preparation."}}]
     volumes:
       - ./data/webui:/app/backend/data
     networks: [backend, frontend]
