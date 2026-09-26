@@ -1,5 +1,5 @@
 # Private, self-hosted ChatGPT-style personal assistant.
-# Ollama + Open WebUI/RAG + Assistant API + Caddy HTTPS.
+# Ollama + Open WebUI/RAG + Assistant API tools + Caddy HTTPS.
 
 x-hardening: &hardening
   security_opt: ["no-new-privileges:true"]
@@ -16,7 +16,7 @@ services:
   open-webui:
     <<: *hardening
     image: ghcr.io/open-webui/open-webui:main
-    depends_on: [ollama]
+    depends_on: [ollama, assistant-api]
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY}
@@ -43,7 +43,7 @@ services:
       - ./data/assistant:/app/data
     ports:
       - "127.0.0.1:8090:8090"
-    networks: [frontend]
+    networks: [backend, frontend]
 
   caddy:
     <<: *hardening
