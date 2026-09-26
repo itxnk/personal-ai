@@ -1,6 +1,5 @@
-# Private, self-hosted ChatGPT-style assistant.
-# Ollama (local LLM) + Open WebUI (chat UI + RAG over your documents) + Caddy (HTTPS).
-# Only Caddy is reachable, and only from this machine (127.0.0.1).
+# Private, self-hosted ChatGPT-style personal assistant.
+# Ollama + Open WebUI/RAG + Assistant API + Caddy HTTPS.
 
 x-hardening: &hardening
   security_opt: ["no-new-privileges:true"]
@@ -13,15 +12,6 @@ services:
     volumes:
       - ./data/ollama:/root/.ollama
     networks: [backend]
-    # No published ports: only other containers can reach it.
-    # NVIDIA GPU (uncomment if you have one + nvidia-container-toolkit):
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
 
   open-webui:
     <<: *hardening
@@ -32,8 +22,8 @@ services:
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY}
       WEBUI_ADMIN_EMAIL: ${ADMIN_EMAIL}
       WEBUI_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-      ENABLE_SIGNUP: "false"            # nobody can self-register
-      ENABLE_OPENAI_API: "false"        # nothing leaves your machine
+      ENABLE_SIGNUP: "false"
+      ENABLE_OPENAI_API: "false"
       RAG_EMBEDDING_ENGINE: ollama
       RAG_EMBEDDING_MODEL: ${EMBED_MODEL}
       ANONYMIZED_TELEMETRY: "false"
@@ -44,14 +34,23 @@ services:
     volumes:
       - ./data/webui:/app/backend/data
     networks: [backend, frontend]
-    # No published ports: reached only through Caddy.
+
+  assistant-api:
+    <<: *hardening
+    build:
+      context: ./assistant-api
+    volumes:
+      - ./data/assistant:/app/data
+    ports:
+      - "127.0.0.1:8090:8090"
+    networks: [frontend]
 
   caddy:
     <<: *hardening
     image: caddy:2
-    depends_on: [open-webui]
+    depends_on: [open-webui, assistant-api]
     ports:
-      - "127.0.0.1:8443:443"           # localhost only. Use a VPN (WireGuard/Tailscale) for remote access.
+      - "127.0.0.1:8443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./data/caddy:/data
