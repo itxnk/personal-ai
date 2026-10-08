@@ -37,6 +37,8 @@ for p in files:
         add = s.post(f"{BASE}/api/v1/knowledge/{kb['id']}/file/add", json={"file_id": fid})
         if add.ok:
             print("OK", p.name); break
+        if "Duplicate" in add.text:
+            print("Already in knowledge base:", p.name); break
         print(f"  attempt {attempt+1}: {add.status_code} {add.text[:200]}")
         time.sleep(3)
     else:

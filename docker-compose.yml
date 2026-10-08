@@ -9,6 +9,8 @@ services:
   ollama:
     <<: *hardening
     image: ollama/ollama:latest
+    environment:
+      OLLAMA_KEEP_ALIVE: 24h   # keep the model loaded so replies start fast
     volumes:
       - ./data/ollama:/root/.ollama
     networks: [backend]
@@ -26,6 +28,10 @@ services:
       ENABLE_OPENAI_API: "false"
       RAG_EMBEDDING_ENGINE: ollama
       RAG_EMBEDDING_MODEL: ${EMBED_MODEL}
+      # Background title/tag/follow-up calls use the same model and slow down CPU-only setups.
+      ENABLE_TITLE_GENERATION: "false"
+      ENABLE_TAGS_GENERATION: "false"
+      ENABLE_FOLLOW_UP_GENERATION: "false"
       ANONYMIZED_TELEMETRY: "false"
       DO_NOT_TRACK: "true"
       SCARF_NO_ANALYTICS: "true"

@@ -12,12 +12,14 @@ A private, self-hosted, ChatGPT-style assistant that knows *your* information. N
 ```bash
 git clone <your-repo-url> personal-ai && cd personal-ai
 ./scripts/setup.sh            # generates secrets, starts containers, pulls models
-cp ~/my-notes/* data/personal/
+cp examples/profile.example.md data/personal/profile.md   # then edit it with your real details
 python3 scripts/ingest.py     # loads your files into the "Personal" knowledge base
+cp examples/system.example.md data/personal/system.md     # edit: your name + how you want answers
+./scripts/create-model.sh     # builds the "personal-assistant" model with that system prompt
 ```
 Open **https://localhost:8443** (accept the local certificate). In a chat, type `#` and choose **Personal**, or attach it to a custom model under *Workspace → Models* so it is always used.
 
-Requirements: Docker, ~16 GB RAM for the 8B model (GPU strongly recommended). Change `CHAT_MODEL` in `.env` for a bigger or smaller model.
+Requirements: Docker, ~8 GB RAM for the default 3B model, ~16 GB for 8B models (GPU strongly recommended). Change `CHAT_MODEL` in `.env`. Models of 1B are too small to follow retrieval or tool prompts reliably.
 
 ## "Training" on your data: what's realistic
 Training a huge model from scratch takes millions of dollars of GPUs. What works:
@@ -40,4 +42,9 @@ docker compose ps        # running processes
 docker compose logs -f   # logs
 docker compose down      # stop
 ```
-# personal-ai
+
+## Troubleshooting
+- **Slow replies**: run `docker compose exec ollama ollama ps`; `100% CPU` means no GPU is in use. Title/tag generation is already disabled to save calls.
+- **Assistant doesn't know your name**: confirm `profile.md` appears under *Workspace -> Knowledge -> Personal*, attach it with `#` (or to a custom model), and use a 3B+ model.
+- **"Duplicate content detected" during ingest**: the file is already in the knowledge base; this is fine.
+
