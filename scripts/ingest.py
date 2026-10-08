@@ -23,7 +23,8 @@ if not kb:
                 json={"name": KB_NAME, "description": "My personal information"}).json()
 print("Knowledge base:", kb["id"])
 
-files = [p for p in (ROOT / "data/personal").rglob("*") if p.is_file() and p.name != "README.txt"]
+files = [p for d in ("profile", "data/personal") if (ROOT / d).is_dir()
+         for p in (ROOT / d).rglob("*") if p.is_file() and p.name != "README.txt"]
 if not files:
     sys.exit("Nothing in data/personal/ yet.")
 

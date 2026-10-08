@@ -12,7 +12,8 @@ A private, self-hosted, ChatGPT-style assistant that knows *your* information. N
 ```bash
 git clone <your-repo-url> personal-ai && cd personal-ai
 ./scripts/setup.sh            # generates secrets, starts containers, pulls models
-cp examples/profile.example.md data/personal/profile.md   # then edit it with your real details
+# public profile lives in profile/profile.md; put private details (phone, family) only in data/personal/ (git-ignored)
+cp examples/profile.example.md data/personal/private.md   # optional, edit with private details
 python3 scripts/ingest.py     # loads your files into the "Personal" knowledge base
 cp examples/system.example.md data/personal/system.md     # edit: your name + how you want answers
 ./scripts/create-model.sh     # builds the "personal-assistant" model with that system prompt
